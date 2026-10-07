@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pstack Flow</title>
+<style>
+:root{
+  --bg:#f6f5f3; --panel:#ffffff; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4; --soft:#f1efec;
+  --accent:#4f46e5; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  --k-prompt:#2563eb; --k-task:#7c3aed; --k-thinking:#94a3b8; --k-text:#0d9488; --k-tool:#d97706;
+  --k-spawn:#db2777; --k-handback:#16a34a; --k-done:#16a34a; --k-turn:#a8a29e;
+  --a0:#4f46e5; --a1:#0891b2; --a2:#c026d3; --a3:#ea580c; --a4:#65a30d; --a5:#e11d48;
+  --shadow:0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131211; --panel:#1c1a18; --ink:#f5f5f4; --muted:#a8a29e; --line:#2f2c29; --soft:#242220;
+    --accent:#818cf8; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --k-prompt:#60a5fa; --k-task:#a78bfa; --k-thinking:#78716c; --k-text:#2dd4bf; --k-tool:#fbbf24;
+    --k-spawn:#f472b6; --k-handback:#4ade80; --k-done:#4ade80; --k-turn:#57534e;
+    --a0:#818cf8; --a1:#22d3ee; --a2:#e879f9; --a3:#fb923c; --a4:#a3e635; --a5:#fb7185;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.on{background:var(--ok);box-shadow:0 0 0 0 var(--ok);animation:ping 1.6s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+select,button,input[type=search]{font:inherit;color:var(--ink);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+label.chk{display:inline-flex;align-items:center;gap:5px;color:var(--muted);cursor:pointer}
+.stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;line-height:1.15}
+.stat b{font-size:15px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:11px}
+main{flex:1;min-height:0;display:grid;grid-template-columns:270px minmax(0,1fr) 400px;gap:0}
+aside,section{min-height:0;overflow:auto}
+#setup{border-right:1px solid var(--line);background:var(--panel);padding:12px}
+#center{display:flex;flex-direction:column;overflow:hidden}
+#feedwrap{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 6px;font-weight:600}
+h2:first-child{margin-top:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.pill{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:2px 9px;font-size:12px;display:inline-flex;gap:5px;align-items:center;cursor:default}
+.pill small{color:var(--muted);font-size:10.5px}
+.pill.used{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent);background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.pill.missing{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--panel))}
+.pill.flash{animation:flash 1.2s}
+@keyframes flash{0%{background:var(--accent);color:#fff}100%{}}
+details{margin-top:6px} summary{cursor:pointer;color:var(--muted);font-size:12px}
+details input{width:100%;margin:6px 0}
+#graphwrap{border-bottom:1px solid var(--line);background:var(--bg);overflow:auto;flex:0 0 auto;max-height:52%}
+#graph{display:block;min-width:100%}
+#tlwrap{flex:1;min-height:120px;overflow:auto;background:var(--panel);padding:8px 12px}
+.sub{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 0}
+.node rect.card{fill:var(--panel);stroke:var(--line);stroke-width:1.2;transition:stroke .2s}
+.node{cursor:pointer}
+.node.sel rect.card{stroke:var(--accent);stroke-width:2}
+.node text{fill:var(--ink);font-size:12px}
+.node text.m{fill:var(--muted);font-size:10.5px}
+.node.failed rect.card{stroke:var(--bad);stroke-dasharray:5 3}
+.node.pulse rect.card{animation:pulse .7s}
+@keyframes pulse{0%{stroke:var(--k-tool);stroke-width:4}100%{}}
+.edge{fill:none;stroke:var(--line);stroke-width:2}
+.edge.running{stroke:var(--accent);stroke-dasharray:6 6;animation:dash 1s linear infinite}
+.edge.done{stroke:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.edge.failed{stroke:var(--bad);stroke-dasharray:3 5}
+.edge.rev{stroke:var(--ok);stroke-width:1.5;stroke-dasharray:2 4;opacity:.7}
+@keyframes dash{to{stroke-dashoffset:-12}}
+.tick{cursor:default}
+.lane{stroke:var(--line);stroke-width:1}
+.axis{fill:var(--muted);font-size:10px}
+#feed{flex:1;overflow:auto}
+.row{padding:6px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.row:hover{background:var(--soft)}
+.row .top{display:flex;gap:6px;align-items:baseline;min-width:0}
+.t{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;min-width:38px}
+.chip{flex-shrink:0;font-size:10.5px;border-radius:4px;padding:0 5px;color:var(--bg);background:var(--c,var(--muted));white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.g{width:14px;text-align:center;color:var(--kc)}
+.row b{color:var(--kc);font-weight:600;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.row .s{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.row.open .s{white-space:normal}
+.row.err b,.row.err .g{color:var(--bad)}
+.badge{font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--muted);white-space:nowrap}
+.badge.bad{color:var(--bad);border-color:var(--bad)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.row pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11.5px;max-height:240px;overflow:auto;background:var(--soft);padding:8px;border-radius:6px}
+.filters{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.empty{padding:40px 20px;color:var(--muted);text-align:center}
+@media (max-width:1100px){
+  body{overflow:auto}
+  main{grid-template-columns:1fr;display:block}
+  #feedwrap{border-left:0;border-top:1px solid var(--line);height:70vh}
+  #setup{border-right:0;border-bottom:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:reduce){.edge.running,.dot.on,.node.pulse rect.card{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>pstack Flow</h1>
+  <span class="live"><span class="dot" id="dot"></span><span id="livetxt">connecting…</span></span>
+  <select id="session" aria-label="Session"></select>
+  <label class="chk"><input type="checkbox" id="follow" checked> follow latest</label>
+  <button id="clearf" hidden>clear agent filter</button>
+  <div class="stats" id="stats"></div>
+</header>
+<main>
+  <aside id="setup" aria-label="Agent setup"></aside>
+  <div id="center">
+    <div class="sub"><span>Flow</span><span id="flowhint">click a node to filter the feed</span></div>
+    <div id="graphwrap"><svg id="graph" height="120"></svg></div>
+    <div class="sub"><span>Timeline</span><span id="tlhint"></span></div>
+    <div id="tlwrap"><svg id="tl" width="100%" height="100"></svg></div>
+  </div>
+  <div id="feedwrap">
+    <div class="filters" id="kindfilters"></div>
+    <div id="feed"></div>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const NS = "http://www.w3.org/2000/svg";
+const KINDS = {
+  prompt:{g:"▸",l:"you",c:"--k-prompt"}, task:{g:"▸",l:"task",c:"--k-task"}, thinking:{g:"◌",l:"thinking",c:"--k-thinking"},
+  text:{g:"¶",l:"says",c:"--k-text"}, tool_use:{g:"⚙",l:"tools",c:"--k-tool"}, spawn:{g:"⎇",l:"spawns",c:"--k-spawn"},
+  handback:{g:"↩",l:"hand-backs",c:"--k-handback"}, done:{g:"✓",l:"done",c:"--k-done"}, turn_end:{g:"■",l:"turn end",c:"--k-turn"}
+};
+const FILTERABLE = ["prompt","task","thinking","text","tool_use","spawn","handback"];
+const S = {sid:null, follow:true, nodes:[], events:[], results:new Map(), cursor:0, es:null, filterAgent:null,
+  kinds:new Set(["prompt","task","text","tool_use","spawn","handback"]), expanded:new Set(), loaded:false,
+  used:new Map(), setup:null, info:null, lastEventAt:0, connected:false, timer:null};
+const pos = new Map();         // node id -> {x,y}
+const gEls = new Map();        // node id -> <g>
+const eEls = new Map();        // node id -> {fwd, rev}
+let raf = 0;
+
+const fmtTok = n => n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"k" : String(n||0);
+const fmtT = ms => { const s = Math.max(0, Math.round(ms/1000)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+const short = m => (m||"").replace(/^claude-/,"").replace(/-\d{8}$/,"");
+const nodeColor = id => {
+  if (id === "main") return "var(--ink)";
+  const i = S.nodes.filter(n => n.id !== "main").findIndex(n => n.id === id);
+  return `var(--a${(i < 0 ? 0 : i) % 6})`;
+};
+const nodeLabel = n => n.id === "main" ? "main" : n.ghost ? n.type : n.type + " ·" + n.id.slice(-4);
+const byId = id => S.nodes.find(n => n.id === id);
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+// ---------- data ----------
+async function loadSessions() {
+  try {
+    const list = await (await fetch("/api/sessions")).json();
+    const sel = $("#session");
+    sel.innerHTML = list.map(s => `<option value="${esc(s.id)}">${esc(s.title || s.project.replace(/^-Users-[^-]+-/,"") || s.id.slice(0,8))} · ${new Date(s.last).toLocaleTimeString()}${s.running ? " · "+s.running+" running" : ""}</option>`).join("");
+    if (S.follow && list.length && list[0].id !== S.sid) connect(list[0].id);
+    else if (S.sid) sel.value = S.sid;
+    if (!S.sid && list.length) connect(list[0].id);
+  } catch (e) { setLive(false, "server unreachable"); }
+}
+async function loadSetup() {
+  try { S.setup = await (await fetch("/api/setup")).json(); renderSetup(); } catch (e) {}
+}
+function connect(sid) {
+  if (S.es) S.es.close();
+  Object.assign(S, {sid, nodes:[], events:[], cursor:0, loaded:false, used:new Map(), filterAgent:null, expanded:new Set(), info:null});
+  S.results = new Map();
+  pos.clear(); gEls.forEach(g => g.remove()); gEls.clear(); eEls.forEach(e => { e.fwd.remove(); e.rev.remove(); }); eEls.clear();
+  open();
+}
+function open() {
+  const es = new EventSource(`/api/stream?session=${encodeURIComponent(S.sid)}&since=${S.cursor}`);
+  S.es = es;
+  es.onopen = () => { S.connected = true; setLive(true); };
+  es.onerror = () => { S.connected = false; setLive(false, "reconnecting…"); es.close(); setTimeout(() => { if (S.es === es) open(); }, 1500); };
+  es.onmessage = m => {
+    const p = JSON.parse(m.data);
+    S.info = p.session; S.nodes = p.nodes; S.turnOpen = p.turnOpen;
+    const live = S.loaded;
+    for (const e of p.events) {
+      S.cursor = Math.max(S.cursor, e.i + 1);
+      if (e.kind === "tool_result") { S.results.set(e.toolUseId, e); continue; }
+      S.events.push(e);
+      if (e.config) S.used.set(e.config.kind + ":" + e.config.name, (S.used.get(e.config.kind + ":" + e.config.name) || 0) + 1);
+      if (live) { S.lastEventAt = Date.now(); animate(e); flashConfig(e); }
+    }
+    S.loaded = true;
+    schedule();
+  };
+}
+function setLive(on, txt) {
+  $("#dot").classList.toggle("on", on);
+  $("#livetxt").textContent = on ? "live" : (txt || "offline");
+}
+
+// ---------- animation ----------
+function pulse(id) {
+  const g = gEls.get(id); if (!g) return;
+  g.classList.remove("pulse"); void g.getBoundingClientRect(); g.classList.add("pulse");
+}
+function packet(pathEl, color) {
+  if (!pathEl || !pathEl.ownerSVGElement) return;
+  const svg = pathEl.ownerSVGElement;
+  const c = el("circle", {r:5, fill:color}, svg);
+  const m = el("animateMotion", {dur:"0.9s", begin:"indefinite", fill:"freeze"}, c);
+  const mp = el("mpath", {}, m); mp.setAttributeNS("http://www.w3.org/1999/xlink","href","#"+pathEl.id); mp.setAttribute("href","#"+pathEl.id);
+  try { m.beginElement(); } catch (e) {}
+  setTimeout(() => c.remove(), 1000);
+}
+function animate(e) {
+  pulse(e.agent);
+  if (e.kind === "spawn") {
+    const child = S.nodes.find(n => n.toolUseId === e.toolUseId);
+    if (child) packet((eEls.get(child.id) || {}).fwd, "var(--k-spawn)");
+  } else if (e.kind === "handback") packet((eEls.get(e.agent) || {}).rev, "var(--k-handback)");
+}
+function flashConfig(e) {
+  if (!e.config) return;
+  document.querySelectorAll(`[data-cfg="${CSS.escape(e.config.kind+":"+e.config.name)}"]`).forEach(p => { p.classList.remove("flash"); void p.offsetWidth; p.classList.add("flash"); });
+}
+
+// ---------- render ----------
+function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+function render() { renderStats(); renderGraph(); renderTimeline(); renderFeed(); renderSetup(true); renderKindFilters(); }
+
+function renderStats() {
+  const subs = S.nodes.filter(n => n.id !== "main");
+  const ok = subs.filter(n => !n.ghost).length, bad = subs.filter(n => n.ghost).length;
+  const running = subs.filter(n => n.status === "running").length;
+  const tools = S.nodes.reduce((a, n) => a + n.tools, 0), out = S.nodes.reduce((a, n) => a + n.out, 0);
+  const t0 = S.info && S.info.start, t1 = (S.turnOpen || running) ? Date.now() : (S.info && S.info.last);
+  const item = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
+  $("#stats").innerHTML = item(running + "/" + ok, "agents running/spawned") + (bad ? item(`<span style="color:var(--bad)">${bad}</span>`, "spawn failures") : "")
+    + item(tools, "tool calls") + item(fmtTok(out), "output tokens") + item(t0 ? fmtT(t1 - t0) : "–", "elapsed");
+  $("#clearf").hidden = !S.filterAgent;
+}
+
+function layout() {
+  const kids = id => S.nodes.filter(n => n.parent === id).sort((a, b) => (a.first || 0) - (b.first || 0));
+  const order = []; let row = 0;
+  const walk = (id, depth) => { for (const k of kids(id)) { pos.set(k.id, {x: 24 + depth * 270, y: 18 + row * 86, depth}); row++; order.push(k.id); walk(k.id, depth + 1); } };
+  walk("main", 1);
+  const rows = Math.max(row, 1);
+  pos.set("main", {x: 24, y: 18 + ((rows - 1) * 86) / 2, depth: 0});
+  return {order, h: 18 + rows * 86};
+}
+const NW = 214, NH = 70;
+function renderGraph() {
+  const svg = $("#graph"), {order, h} = layout();
+  let maxX = 0; pos.forEach(p => { maxX = Math.max(maxX, p.x + NW); });
+  svg.setAttribute("height", Math.max(h, 110)); svg.setAttribute("width", Math.max(maxX + 30, 480));
+  const live = new Set(["main", ...order]);
+  gEls.forEach((g, id) => { if (!live.has(id)) { g.remove(); gEls.delete(id); const e = eEls.get(id); if (e) { e.fwd.remove(); e.rev.remove(); eEls.delete(id); } } });
+  for (const id of ["main", ...order]) {
+    const n = byId(id); if (!n) continue;
+    const p = pos.get(id);
+    if (id !== "main") {
+      const q = pos.get(n.parent) || pos.get("main");
+      let e = eEls.get(id);
+      if (!e) {
+        e = {fwd: el("path", {id: "fwd-" + id}, svg), rev: el("path", {id: "rev-" + id}, svg)};
+        svg.insertBefore(e.rev, svg.firstChild); svg.insertBefore(e.fwd, svg.firstChild); eEls.set(id, e);
+      }
+      const x1 = q.x + NW, y1 = q.y + NH / 2 - 6, x2 = p.x, y2 = p.y + NH / 2 - 6;
+      e.fwd.setAttribute("d", `M${x1} ${y1} C${x1+50} ${y1} ${x2-50} ${y2} ${x2} ${y2}`);
+      e.rev.setAttribute("d", `M${x2} ${y2+12} C${x2-50} ${y2+12} ${x1+50} ${y1+12} ${x1} ${y1+12}`);
+      e.fwd.setAttribute("class", "edge " + (n.status === "failed" ? "failed" : n.status === "running" ? "running" : "done"));
+      e.rev.setAttribute("class", "edge rev"); e.rev.style.display = n.reported ? "" : "none";
+    }
+    let g = gEls.get(id);
+    if (!g) {
+      g = el("g", {}, svg); g.addEventListener("click", () => { S.filterAgent = S.filterAgent === id ? null : id; schedule(); });
+      el("rect", {class:"card", rx:10, width:NW, height:NH}, g);
+      el("rect", {class:"bar", x:0, y:0, width:5, height:NH, rx:2}, g);
+      for (const k of ["title","desc","meta","meta2"]) el("text", {class: k.startsWith("meta") || k === "desc" ? "m" : "", "data-k": k}, g);
+      el("circle", {class:"sd", r:4.5}, g); el("title", {}, g);
+      gEls.set(id, g);
+    }
+    g.setAttribute("class", "node " + n.status + (S.filterAgent === id ? " sel" : "") + (g.classList.contains("pulse") ? " pulse" : ""));
+    g.setAttribute("transform", `translate(${p.x} ${p.y})`);
+    g.querySelector(".bar").setAttribute("fill", nodeColor(id));
+    const T = k => g.querySelector(`[data-k=${k}]`);
+    const set = (k, x, y, t) => { const e = T(k); e.setAttribute("x", x); e.setAttribute("y", y); e.textContent = t; };
+    set("title", 16, 20, nodeLabel(n).slice(0, 26) + (nodeLabel(n).length > 26 ? "…" : "")); T("title").style.fontWeight = 600;
+    set("desc", 16, 37, (n.id === "main" ? (S.info && S.info.title) || "session" : n.desc || "").slice(0, 34));
+    set("meta", 16, 53, n.ghost ? "✕ " + (n.error || "spawn failed").slice(0, 34) : `${n.tools} tools · ${fmtTok(n.out)} out · ctx ${fmtTok(n.ctx)}`);
+    set("meta2", 16, 65, n.ghost ? "" : short(n.model) || "");
+    const sd = g.querySelector(".sd"); sd.setAttribute("cx", NW - 14); sd.setAttribute("cy", 16);
+    sd.setAttribute("fill", {running:"var(--ok)", active:"var(--ok)", done:"var(--muted)", idle:"var(--muted)", failed:"var(--bad)", stalled:"var(--warn)"}[n.status] || "var(--muted)");
+    g.querySelector("title").textContent = `${nodeLabel(n)} — ${n.status}${n.error ? "\n" + n.error : ""}${n.background ? "\n(background)" : ""}`;
+  }
+  gEls.forEach(g => svg.appendChild(g));
+  $("#flowhint").textContent = S.filterAgent ? "filtering feed to " + nodeLabel(byId(S.filterAgent) || {id:"?",type:"?"}) + " — click again to clear" : "click a node to filter the feed";
+}
+
+function renderTimeline() {
+  const svg = $("#tl"), ids = ["main", ...layoutOrder()];
+  const lanes = ids.filter(id => byId(id));
+  const W = Math.max(svg.parentElement.clientWidth - 24, 300), L = 150, LH = 26, H = lanes.length * LH + 22;
+  svg.setAttribute("height", H); svg.setAttribute("width", W);
+  const evs = S.events.filter(e => e.kind !== "thinking" || S.kinds.has("thinking"));
+  if (!evs.length) { svg.innerHTML = ""; $("#tlhint").textContent = "waiting for activity…"; return; }
+  const t0 = Math.min(...evs.map(e => e.ts)), active = S.turnOpen || S.nodes.some(n => n.status === "running");
+  const t1 = Math.max(active ? Date.now() : S.info.last, t0 + 5000), span = t1 - t0;
+  const X = t => L + (t - t0) / span * (W - L - 8);
+  let h = "";
+  lanes.forEach((id, i) => {
+    const y = 14 + i * LH, n = byId(id);
+    h += `<line class="lane" x1="${L}" x2="${W-8}" y1="${y+LH/2}" y2="${y+LH/2}"/><text class="axis" x="4" y="${y+LH/2+3}" fill="${nodeColor(id)}" style="fill:${nodeColor(id)}">${esc(nodeLabel(n).slice(0, 24))}</text>`;
+  });
+  const lane = id => lanes.indexOf(id);
+  for (const e of evs) {
+    const i = lane(e.agent); if (i < 0) continue;
+    const y = 14 + i * LH + LH / 2, c = `var(${KINDS[e.kind].c})`, dim = S.filterAgent && S.filterAgent !== e.agent ? .25 : 1;
+    const r = e.toolUseId && S.results.get(e.toolUseId), x = X(e.ts);
+    const tip = `${KINDS[e.kind].l}: ${e.name} — ${e.summary}`;
+    if (r && r.durationMs > 400) {
+      const w = Math.max(3, X(e.ts + r.durationMs) - x);
+      h += `<rect class="tick" x="${x}" y="${y-5}" width="${w}" height="10" rx="3" fill="${r.isError ? "var(--bad)" : c}" opacity="${.85*dim}"><title>${esc(tip)} (${(r.durationMs/1000).toFixed(1)}s)</title></rect>`;
+    } else {
+      h += `<circle class="tick" cx="${x}" cy="${y}" r="${e.kind === "spawn" || e.kind === "handback" ? 5 : 3}" fill="${r && r.isError ? "var(--bad)" : c}" opacity="${dim}"><title>${esc(tip)}</title></circle>`;
+    }
+  }
+  const step = span > 600000 ? 120000 : span > 120000 ? 30000 : span > 40000 ? 10000 : 5000;
+  for (let t = Math.ceil(t0 / step) * step; t < t1; t += step) h += `<text class="axis" x="${X(t)}" y="${H-4}" text-anchor="middle">+${fmtT(t - t0)}</text>`;
+  svg.innerHTML = h;
+  $("#tlhint").textContent = `${fmtT(span)} window${active ? " · live" : ""}`;
+}
+function layoutOrder() { return layout().order; }
+
+function renderKindFilters() {
+  const box = $("#kindfilters");
+  if (box.dataset.ready) { box.querySelectorAll("input").forEach(i => i.checked = S.kinds.has(i.value)); return; }
+  box.dataset.ready = 1;
+  box.innerHTML = FILTERABLE.map(k => `<label class="chk" style="color:var(${KINDS[k].c})"><input type="checkbox" value="${k}" ${S.kinds.has(k) ? "checked" : ""}>${KINDS[k].g} ${KINDS[k].l}</label>`).join("");
+  box.addEventListener("change", e => { e.target.checked ? S.kinds.add(e.target.value) : S.kinds.delete(e.target.value); schedule(); });
+}
+
+function renderFeed() {
+  const feed = $("#feed"), t0 = S.info && S.info.start || 0;
+  let rows = S.events.filter(e => (S.kinds.has(e.kind) || e.kind === "done" || e.kind === "turn_end") && (!S.filterAgent || e.agent === S.filterAgent));
+  rows = rows.filter(e => e.kind !== "turn_end" || !S.filterAgent).sort((a, b) => b.ts - a.ts || b.i - a.i).slice(0, 400);
+  if (!rows.length) { feed.innerHTML = `<div class="empty">${S.sid ? "No events match the filters yet." : "Waiting for a session…"}</div>`; return; }
+  const prevH = feed.scrollHeight, prevTop = feed.scrollTop;
+  feed.innerHTML = rows.map(e => {
+    const n = byId(e.agent) || {id:e.agent,type:e.agent}, k = KINDS[e.kind], r = e.toolUseId && S.results.get(e.toolUseId);
+    let badge = "";
+    if (e.kind === "spawn") badge = r ? (r.isError ? `<span class="badge bad">✕ not found</span>` : `<span class="badge ok">launched</span>`) : `<span class="badge">…</span>`;
+    else if (e.kind === "tool_use" && r) badge = `<span class="badge ${r.isError ? "bad" : ""}">${r.isError ? "error " : ""}${r.durationMs != null ? (r.durationMs/1000).toFixed(1) + "s" : ""}</span>`;
+    else if (e.kind === "handback") badge = `<span class="badge ok">→ main</span>`;
+    const open = S.expanded.has(e.i);
+    const detail = open ? `<pre>${esc(e.kind === "tool_use" || e.kind === "spawn" ? (e.detail || e.summary) + (r ? "\n\n— result —\n" + r.detail : "") : e.detail || e.summary)}</pre>` : "";
+    return `<div class="row ${open ? "open" : ""} ${(e.kind === "spawn" && r && r.isError) || (r && r.isError) ? "err" : ""}" data-i="${e.i}" style="--kc:var(${k.c})">
+      <div class="top"><span class="t">+${fmtT(e.ts - t0)}</span><span class="chip" style="--c:${nodeColor(e.agent)}">${esc(nodeLabel(n))}</span><span class="g">${k.g}</span><b>${esc(e.name)}</b><span class="s">${esc(e.summary)}</span>${badge}</div>${detail}</div>`;
+  }).join("");
+  if (prevTop > 0) feed.scrollTop = prevTop + (feed.scrollHeight - prevH);
+}
+
+function renderSetup(light) {
+  const box = $("#setup"), s = S.setup;
+  if (!s) { box.innerHTML = '<div class="empty">loading setup…</div>'; return; }
+  const used = k => S.used.get(k) || 0;
+  const missing = [...new Set(S.nodes.filter(n => n.ghost).map(n => n.type))];
+  const registered = new Set(s.agents.map(a => a.name));
+  const pill = (kind, name, extra, tip) => `<span class="pill ${used(kind+":"+name) ? "used" : ""}" data-cfg="${esc(kind+":"+name)}" title="${esc(tip||"")}">${esc(name)}${extra ? `<small>${esc(extra)}</small>` : ""}${used(kind+":"+name) ? `<small>×${used(kind+":"+name)}</small>` : ""}</span>`;
+  const sig = JSON.stringify([s, [...S.used], missing]);
+  if (light && box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  const skillsUsed = s.skills.filter(k => used("skill:"+k.name)), skillsRest = s.skills.filter(k => !used("skill:"+k.name));
+  box.innerHTML = `
+    <h2>Custom agents</h2><div class="chips">${s.agents.map(a => pill("agent", a.name, [short(a.model), a.background === "true" ? "bg" : ""].filter(Boolean).join(" · "), a.desc + (a.tools ? "\ntools: " + a.tools : ""))).join("") || '<small style="color:var(--muted)">none in ~/.claude/agents</small>'}
+    ${missing.filter(m => !registered.has(m) || true).map(m => `<span class="pill missing" title="Requested by a spawn but the harness rejected it. Agents load at session start.">✕ ${esc(m)}<small>not found</small></span>`).join("")}</div>
+    <h2>Built-in agents</h2><div class="chips">${s.builtin.map(b => pill("agent", b)).join("")}</div>
+    <h2>Rules</h2><div class="chips">${s.rules.map(r => pill("rule", r.name, r.always ? "always" : r.paths.join(" "), r.paths.join("\n"))).join("") || '<small style="color:var(--muted)">none</small>'}</div>
+    <h2>Skills <small style="text-transform:none;letter-spacing:0">(${s.skills.length})</small></h2>
+    <div class="chips">${skillsUsed.map(k => pill("skill", k.name, k.manual ? "manual" : "", k.desc)).join("")}</div>
+    <details><summary>${skillsRest.length} more</summary><input type="search" placeholder="filter skills…" id="skillq"><div class="chips" id="skilllist">${skillsRest.map(k => pill("skill", k.name, k.manual ? "manual" : "", k.desc)).join("")}</div></details>
+    ${s.models ? `<h2>Model settings</h2><details><summary>~/.agents/pstack-models.md</summary><pre class="mono" style="white-space:pre-wrap;font-size:11px">${esc(s.models)}</pre></details>` : ""}`;
+  const q = $("#skillq");
+  if (q) q.addEventListener("input", () => { const v = q.value.toLowerCase(); document.querySelectorAll("#skilllist .pill").forEach(p => p.style.display = p.textContent.toLowerCase().includes(v) ? "" : "none"); });
+}
+
+// ---------- wiring ----------
+$("#feed").addEventListener("click", e => { const r = e.target.closest(".row"); if (!r) return; const i = +r.dataset.i; S.expanded.has(i) ? S.expanded.delete(i) : S.expanded.add(i); schedule(); });
+$("#session").addEventListener("change", e => { $("#follow").checked = S.follow = false; connect(e.target.value); });
+$("#follow").addEventListener("change", e => { S.follow = e.target.checked; if (S.follow) loadSessions(); });
+$("#clearf").addEventListener("click", () => { S.filterAgent = null; schedule(); });
+window.addEventListener("resize", schedule);
+setInterval(loadSessions, 4000);
+setInterval(() => { if (S.turnOpen || S.nodes.some(n => n.status === "running")) schedule(); }, 1000);
+setInterval(loadSetup, 10000);
+loadSetup(); loadSessions();
+</script>
+</body>
+</html>
